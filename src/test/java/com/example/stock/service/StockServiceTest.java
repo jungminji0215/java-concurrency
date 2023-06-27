@@ -8,6 +8,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
@@ -38,4 +42,37 @@ class StockServiceTest  {
 
         assertEquals(99, stock.getQuantity());
     }
+
+    // 동시에 100개 요청을 하려면 멀티쓰레드를 사용해야한다.
+
+    @Test
+    public void 동시에_100명이_주문() throws InterruptedException {
+        int threadCount = 100;
+
+        // 멀티 쓰레드 사용
+        // ExecutorService 비동기로 실행하는 작업을 단순화하여 사용할 수 있게 도와줌
+        ExecutorService executorService = Executors.newFixedThreadPool(32);
+
+        // 100개의 요청이 끝날때까지 기다린다.
+        CountDownLatch latch = new CountDownLatch(threadCount);
+
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(() -> {
+                try {
+                    stockService.decrease(1L, 1L);
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+
+        latch.await();
+
+        Stock stock = stockRepository.findById(1L).orElseThrow();
+
+        // 100 - (100 * 1) = 0
+        assertEquals(0, stock.getQuantity());
+    }
+    // 실패원인 : 레이스 컨디션?
+    // 레이스 컨디션 : 둘 이상의 쓰레드가 공유데이터에 접근할수있고, 동시에 변경하려고할때 발생하는 문제이다.
 }
